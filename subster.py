@@ -78,11 +78,16 @@ init()
 print("Initializing...")
 prep_subs()
 print("Initialized")
-subreddit = reddit.subreddit("morpentest")
+subreddit = reddit.subreddit("all")
 for comment in subreddit.stream.comments():
 	if("!subster" in comment.body):
 		if(comment.id not in already_done):
-			print("Analyzing: "+comment.author.name)
-			dictionary = analyze(comment.author.name)
-			reply = get_reply(dictionary)
-			comment.reply(reply)
+			try:
+				print("Analyzing: "+comment.author.name)
+				dictionary = analyze(comment.author.name)
+				reply = get_reply(dictionary)
+				comment.reply(reply)
+				print("Done")
+				already_done.append(comment.id)
+			except:
+				print("Whoops: " + comment.id)
