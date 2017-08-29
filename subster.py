@@ -11,6 +11,7 @@ import threading
 
 stemmer = PorterStemmer()
 
+subreddits_main_dict = {}
 subreddits_large_dict = {}
 subreddits_political_dict = {}
 subreddits_meta_dict = {}
@@ -19,21 +20,18 @@ subreddits_large = []
 subreddits_political = []
 subreddits_meta = []
 reddit = None
-vectorizer = None
 
 def init():
 	global subreddits_large
 	global subreddits_political
 	global subreddits_meta
 	global reddit
-	global vectorizer
 	with open('subster.json') as settings_file:    
 		settings = json.load(settings_file)
 		subreddits_large = settings["subreddits_large"]
 		subreddits_political = settings["subreddits_political"]
 		subreddits_meta = settings["subreddits_meta"]
 
-	vectorizer = TfidfVectorizer(tokenizer=tokenize, stop_words='english')
 	reddit = praw.Reddit(client_id=settings["client_id"],
 						 client_secret=settings["secret"],
 						 password=settings["password"],
@@ -41,10 +39,15 @@ def init():
 						 username=settings["username"])
 					 
 def prep_subs():
-	global subreddit_dict
 	threads = []
+
 	for sub in subreddits_large:
 		t = threading.Thread(target=scrape_subreddit, args=(sub,subreddits_large_dict))
+		threads.append(t)
+		t.start()
+
+	for sub in subreddits_large[:10]:
+		t = threading.Thread(target=scrape_subreddit, args=(sub,subreddits_main_dict))
 		threads.append(t)
 		t.start()
 
@@ -71,19 +74,19 @@ def stem_tokens(tokens, stemmer):
 		stemmed.append(stemmer.stem(item))
 	return stemmed
 
-def analyze(username,dictionary):
+def analyze(username,subreddit_dictionary):
 	user_comments = get_user_comments(username)
-	dictionary = {}
+	score_dictionary = {}
 	threads = []
-	for key, value in dictionary.items():
-		t = threading.Thread(target=vectorize, args=(dictionary,user_comments,value,key))
+	for key, value in subreddit_dictionary.items():
+		t = threading.Thread(target=vectorize, args=(score_dictionary,user_comments,value,key))
 		threads.append(t)
 		t.start()
 
 	for thread in threads:
 		thread.join();
 		
-	return sorted(dictionary.items(), key=operator.itemgetter(1),reverse=True)[:10]
+	return sorted(score_dictionary.items(), key=operator.itemgetter(1),reverse=True)[:10]
 
 def get_user_comments(username):
 	comment_string = ""
@@ -91,15 +94,14 @@ def get_user_comments(username):
 		comment_string += comment.body
 	return comment_string
 	
-def get_reply(dictionary):
-	reply = "Hello! I have analysed your vocabulary and compared it to over "+str(len(dictionary))+" subreddits, and here's how you stack up!  \n\n"
+def get_reply(username,dictionary,size):
+	reply = "Hello /u/"+username+"! I have analysed your vocabulary and compared it to over "+str(size)+" subreddits, and here's how you stack up!  \n\n"
 	for key, value in dictionary:
 		reply+= key + ": " + str(value)+"  \n"
-	reply+="\n\n  ***** \n\n ^I ^am ^a ^bot ^and ^this ^action ^was ^performed ^automatically.  \n\n ^Made ^by ^/u/morpen"
+	reply+="\n\n  ***** \n\n ^I ^am ^a ^bot ^and ^this ^action ^was ^performed ^automatically.  \n\n ^Made ^by ^[morpen](http://www.reddit.com/user/morpen)"
 	return reply
 
 def scrape_subreddit(sub,dictionary):
-	print(sub)
 	try:
 		comment_string = ""
 		for comment in reddit.subreddit(sub).comments(limit=100):
@@ -108,28 +110,34 @@ def scrape_subreddit(sub,dictionary):
 		translator = str.maketrans('', '', string.punctuation)
 		no_punc = lower.translate(translator)
 		dictionary[sub] = no_punc
+		print(sub + " initialized")
 	except:
-		print(sub + " broke")
+		print(sub + " filed")
 
 def analyze_user(comment,dictionary):
 	print("Analyzing: "+comment.author.name)
 	scores = analyze(comment.author.name,dictionary)
-	reply = get_reply(scores)
+	reply = get_reply(comment.author.name, scores, len(dictionary))
 	comment.reply(reply)
 	print("Done")
 	already_done.append(comment.id)	
 
 def vectorize(dictionary, user_comments, subreddit_comments, key):
+	vectorizer = TfidfVectorizer(tokenizer=tokenize, stop_words='english')
 	tfidf = vectorizer.fit_transform([user_comments, subreddit_comments])
 	score = ((tfidf * tfidf.T).A)[0,1]
 	dictionary[key]=score
-	
+
+sub_name = "all" 
+if len(sys.argv) > 1:
+	sub_name = sys.argv[1]
 init()
 print("Initializing...")
 prep_subs()	
 print("Initialized")
+subreddit = reddit.subreddit(sub_name)
+print("Listening on /r/"+sub_name)
 print()
-subreddit = reddit.subreddit("morpentest")
 for comment in subreddit.stream.comments():
 	if("!subster" in comment.body):
 		if(comment.id not in already_done):
@@ -143,7 +151,7 @@ for comment in subreddit.stream.comments():
 				print("large requested")
 				dictionary = subreddits_large_dict
 			else:
-				dictionary = subreddits_political_dict
+				dictionary = subreddits_main_dict
 			try:
 				t = threading.Thread(target=analyze_user,args=(comment,dictionary))
 				t.start()
