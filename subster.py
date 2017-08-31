@@ -8,6 +8,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 import operator
 import sys
 import threading
+import copy
 
 stemmer = PorterStemmer()
 
@@ -76,16 +77,10 @@ def stem_tokens(tokens, stemmer):
 
 def analyze(username,subreddit_dictionary):
 	user_comments = get_user_comments(username)
-	score_dictionary = {}
-	threads = []
-	for key, value in subreddit_dictionary.items():
-		t = threading.Thread(target=vectorize, args=(score_dictionary,user_comments,value,key))
-		threads.append(t)
-		t.start()
-
-	for thread in threads:
-		thread.join();
-		
+	score_dictionary = copy.deepcopy(subreddit_dictionary)
+	score_dictionary[username] = user_comments
+	vectorize(score_dictionary, username)
+	del score_dictionary[username]
 	return sorted(score_dictionary.items(), key=operator.itemgetter(1),reverse=True)[:10]
 
 def get_user_comments(username):
@@ -97,7 +92,7 @@ def get_user_comments(username):
 def get_reply(username,dictionary,size):
 	reply = "Hello /u/"+username+"! I have analysed your vocabulary and compared it to over "+str(size)+" subreddits, and here's how you stack up!  \n\n"
 	for key, value in dictionary:
-		score = "%.3f" % value
+		score = "%.3f" % float(value)
 		reply+= key + ": " + score +"%  \n"
 	if(size > len(dictionary)):
 		reply += "\n\n^Displaying ^only ^the ^top ^" + str(len(dictionary)) + " results to reduce message size."
@@ -125,11 +120,24 @@ def analyze_user(comment,dictionary):
 	print("Done")
 	already_done.append(comment.id)	
 
-def vectorize(dictionary, user_comments, subreddit_comments, key):
+def vectorize(dictionary, username):
+	subreddits = []
+	comments = []
+	for key,value in dictionary.items(): 
+		subreddits.append(key) 
+		comments.append(value)
 	vectorizer = TfidfVectorizer(tokenizer=tokenize, stop_words='english')
-	tfidf = vectorizer.fit_transform([user_comments, subreddit_comments])
-	score = ((tfidf * tfidf.T).A)[0,1]*100
-	dictionary[key]=score
+	tfidf = vectorizer.fit_transform(comments)
+	score = ((tfidf * tfidf.T).A)
+	i=0
+	values = score[subreddits.index(username)]
+	print(values)
+	print(subreddits)
+	for subreddit in subreddits:
+		dictionary[subreddit] = values[i]*100
+		print(subreddit, values[i])
+		i+=1
+	return dictionary
 
 sub_name = "all" 
 if len(sys.argv) > 1:
