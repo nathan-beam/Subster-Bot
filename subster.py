@@ -95,7 +95,7 @@ def get_reply(username,dictionary,size):
 		score = "%.3f" % float(value)
 		reply+= key + ": " + score +"%  \n"
 	if(size > len(dictionary)):
-		reply += "\n\n^Displaying ^only ^the ^top ^" + str(len(dictionary)) + " results to reduce message size."
+		reply += "\n\n^Displaying ^only ^the ^top ^" + str(len(dictionary)) + " ^results ^to ^reduce ^message ^size."
 	reply+="\n\n  ***** \n\n ^I ^am ^a ^bot ^and ^this ^action ^was ^performed ^by ^user ^request.  \n\n ^Made ^by ^[morpen](http://www.reddit.com/user/morpen)"
 	return reply
 
@@ -110,7 +110,7 @@ def scrape_subreddit(sub,dictionary):
 		dictionary[sub] = no_punc
 		print(sub + " initialized")
 	except:
-		print(sub + " filed")
+		print(sub + " failed")
 
 def analyze_user(comment,dictionary):
 	print("Analyzing: "+comment.author.name)
