@@ -97,8 +97,11 @@ def get_user_comments(username):
 def get_reply(username,dictionary,size):
 	reply = "Hello /u/"+username+"! I have analysed your vocabulary and compared it to over "+str(size)+" subreddits, and here's how you stack up!  \n\n"
 	for key, value in dictionary:
-		reply+= key + ": " + str(value)+"  \n"
-	reply+="\n\n  ***** \n\n ^I ^am ^a ^bot ^and ^this ^action ^was ^performed ^automatically.  \n\n ^Made ^by ^[morpen](http://www.reddit.com/user/morpen)"
+		score = "%.3f" % value
+		reply+= key + ": " + score +"%  \n"
+	if(size > len(dictionary)):
+		reply += "\n\n^Displaying ^only ^the ^top ^" + str(len(dictionary)) + " results to reduce message size."
+	reply+="\n\n  ***** \n\n ^I ^am ^a ^bot ^and ^this ^action ^was ^performed ^by ^user ^request.  \n\n ^Made ^by ^[morpen](http://www.reddit.com/user/morpen)"
 	return reply
 
 def scrape_subreddit(sub,dictionary):
@@ -125,7 +128,7 @@ def analyze_user(comment,dictionary):
 def vectorize(dictionary, user_comments, subreddit_comments, key):
 	vectorizer = TfidfVectorizer(tokenizer=tokenize, stop_words='english')
 	tfidf = vectorizer.fit_transform([user_comments, subreddit_comments])
-	score = ((tfidf * tfidf.T).A)[0,1]
+	score = ((tfidf * tfidf.T).A)[0,1]*100
 	dictionary[key]=score
 
 sub_name = "all" 
