@@ -131,8 +131,6 @@ def vectorize(dictionary, username):
 	score = ((tfidf * tfidf.T).A)
 	i=0
 	values = score[subreddits.index(username)]
-	print(values)
-	print(subreddits)
 	for subreddit in subreddits:
 		dictionary[subreddit] = values[i]*100
 		print(subreddit, values[i])
