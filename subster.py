@@ -9,6 +9,7 @@ import operator
 import sys
 import threading
 import copy
+import sqlite3
 
 stemmer = PorterStemmer()
 
@@ -16,23 +17,26 @@ subreddits_main_dict = {}
 subreddits_large_dict = {}
 subreddits_political_dict = {}
 subreddits_meta_dict = {}
-already_done = []
 subreddits_large = []
 subreddits_political = []
 subreddits_meta = []
+
 reddit = None
+db = None
 
 def init():
 	global subreddits_large
 	global subreddits_political
 	global subreddits_meta
 	global reddit
+	global db
 	with open('subster.json') as settings_file:    
 		settings = json.load(settings_file)
 		subreddits_large = settings["subreddits_large"]
 		subreddits_political = settings["subreddits_political"]
 		subreddits_meta = settings["subreddits_meta"]
 
+	db = sqlite3.connect('subster.db')
 	reddit = praw.Reddit(client_id=settings["client_id"],
 						 client_secret=settings["secret"],
 						 password=settings["password"],
@@ -118,7 +122,6 @@ def analyze_user(comment,dictionary):
 	reply = get_reply(comment.author.name, scores, len(dictionary))
 	comment.reply(reply)
 	print("Done")
-	already_done.append(comment.id)	
 
 def vectorize(dictionary, username):
 	subreddits = []
@@ -133,9 +136,16 @@ def vectorize(dictionary, username):
 	values = score[subreddits.index(username)]
 	for subreddit in subreddits:
 		dictionary[subreddit] = values[i]*100
-		print(subreddit, values[i])
 		i+=1
 	return dictionary
+
+def already_complete(comment_id):
+	exists = db.cursor().execute("SELECT EXISTS(SELECT 1 FROM already_complete WHERE id=? LIMIT 1)",[comment_id]).fetchone()[0]
+	return exists
+
+def insert(comment_id):
+	db.cursor().execute("INSERT INTO already_complete VALUES(?)",[comment_id])
+	db.commit()
 
 sub_name = "all" 
 if len(sys.argv) > 1:
@@ -148,8 +158,8 @@ subreddit = reddit.subreddit(sub_name)
 print("Listening on /r/"+sub_name)
 print()
 for comment in subreddit.stream.comments():
-	if("!subster" in comment.body):
-		if(comment.id not in already_done):
+	if("!subster" in comment.body.lower()):
+		if(not already_complete(comment.id)):
 			if("!p" in comment.body):
 				print("political requested")
 				dictionary = subreddits_political_dict
@@ -164,5 +174,6 @@ for comment in subreddit.stream.comments():
 			try:
 				t = threading.Thread(target=analyze_user,args=(comment,dictionary))
 				t.start()
+				insert(comment.id)
 			except:
-				print("Whoops: " + sys.exc_info()[0])
+				print("Whoops, we had a problem there")
